@@ -199,10 +199,13 @@
 --     1. Написать запрос с WHERE IN (подзапрос)
         SELECT id, name
           FROM owner
-         WHERE name IN ('Cicero', 'Mark');
+         WHERE name IN (SELECT name
+                          FROM owner
+                          LEFT JOIN apartment a ON owner.apartment_id = a.id
+                         WHERE room_count = 2);
 
 --     2. Написать запрос SELECT atr1, atr2, (подзапрос) FROM ...
-        SELECT id, name,
+        SELECT id, phone,
             (SELECT apartment_id
               FROM apartment
              WHERE owner.id = apartment.id)
