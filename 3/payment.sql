@@ -1,20 +1,20 @@
 -- 1. INSERT
 --  1. Без указания списка полей
-        INSERT INTO house VALUES (1, 'Rome', 2, 100);
-        INSERT INTO apartment VALUES (1, 2, 1, 1, 1);
-        INSERT INTO owner VALUES (1, 'Mark', '78923232323', 1);
-        INSERT INTO utility_fee VALUES (1, 10, 20, 30, 40);
-        INSERT INTO payment VALUES (1, 2000, 1, 1, '2020-02-02');
+        INSERT INTO house VALUES (1, 'Rome', 2, '1977-02-02');
+        INSERT INTO owner VALUES (1, 'Mark', '78923232323');
+        INSERT INTO apartment VALUES (1, 2, 1, 1, 1, 1);
+        INSERT INTO utility_fee VALUES (1, 'water', 50);
+        INSERT INTO payment VALUES (1, 2000, 1, '2020-02-02', true, 1);
 
 --  2. С указанием списка полей
-        INSERT INTO house (id, address, floor_count, age) VALUES (2, 'Crimea', 2, 100);
-        INSERT INTO apartment (id, room_count, floor_space, resident_count, house_id) VALUES (2, 2, 50, 3, 2);
-        INSERT INTO owner (id, name, phone, apartment_id) VALUES (2, 'Seneka', '738892323434', 2);
-        INSERT INTO utility_fee (id, water, gas, sewer, electricity) VALUES (2, 10, 20, 30, 40);
-        INSERT INTO payment (id, amount, owner_id, utility_fee_id, date) VALUES (2, 1000, 2, 2, '2020-02-02');
+        INSERT INTO house (house_id, address, floor_count, construction_date) VALUES (2, 'Crimea', 2, '12-12-1999');
+        INSERT INTO owner (owner_id, name, phone) VALUES (2, 'Seneka', '738892323434');
+        INSERT INTO apartment (apartment_id, room_count, floor_space, resident_count, owner_id, house_id) VALUES (2, 2, 50, 3, 2, 2);
+        INSERT INTO utility_fee (utility_fee_id, name, price_per_unit) VALUES (2, 'water', 30);
+        INSERT INTO payment (payment_id, amount, utility_fee_id, date, is_paid, apartment_id) VALUES (2, 1000, 2, '2020-02-02', false, 2);
 
 --  3. С чтением значения из другой таблицы
-        INSERT INTO payment (amount) SELECT water FROM utility_fee;
+        INSERT INTO utility_fee (price_per_unit)  SELECT (amount) FROM payment;
 
 -- 2. DELETE
 -- 	1. Всех записей
@@ -54,7 +54,7 @@
 -- 	3. С условием по атрибуту (SELECT * FROM ... WHERE atr1 = "")
         SELECT name
           FROM owner
-         WHERE name = 'Cicero';
+         WHERE name = 'Seneka';
 
 -- 5. SELECT ORDER BY + TOP (LIMIT)
 --  1. С сортировкой по возрастанию ASC + ограничение вывода количества записей
@@ -78,7 +78,7 @@
 --  4. С сортировкой по первому атрибуту, из списка извлекаемых
         SELECT *
           FROM apartment
-        ORDER BY id;
+        ORDER BY apartment_id;
 
 -- 6. Работа с датами. Необходимо, чтобы одна из таблиц содержала атрибут с типом DATETIME.
 --     Например, таблица авторов может содержать дату рождения автора.
@@ -121,43 +121,47 @@
 
 -- 8. SELECT GROUP BY + HAVING
 --     1. Написать 3 разных запроса с использованием GROUP BY + HAVING
-        SELECT owner_id, MIN(date)
-          FROM payment
-        GROUP BY owner_id, date
-         HAVING date > '2020-02-01';
+        SELECT AVG(floor_count)
+          FROM house
+        GROUP BY address
+        HAVING AVG(floor_count) < 20;
 
-        SELECT id, MIN(floor_space)
-          FROM apartment
-        GROUP BY id, floor_space
-         HAVING floor_space > 40;
-
-        SELECT MIN(amount)
+        SELECT COUNT(o.owner_id)
           FROM payment
-        GROUP BY amount
-         HAVING amount::money::numeric::int > 1000;
+            LEFT JOIN apartment a
+              ON payment.apartment_id = a.apartment_id
+            LEFT JOIN owner o
+              ON a.owner_id = o.owner_id
+        GROUP BY o.name
+        HAVING COUNT(amount) = 1;
+
+        SELECT date, COUNT(payment_id)
+          FROM payment
+        GROUP BY date
+        HAVING COUNT(payment_id) = 2;
 
 -- 9. SELECT JOIN
 --     1. LEFT JOIN двух таблиц и WHERE по одному из атрибутов
         SELECT
-            owner_id, utility_fee_id, amount
+          apartment_id, payment.utility_fee_id, amount
           FROM
               payment
           LEFT JOIN
               utility_fee
                   ON
-                    utility_fee.id = utility_fee_id
+                    utility_fee.utility_fee_id = payment.utility_fee_id
          WHERE
-             water + gas + sewer + electricity = money(100);
+             utility_fee.price_per_unit > 40::money;
 
 --     2. RIGHT JOIN. Получить такую же выборку, как и в 5.1
         SELECT
-            apartment.id, apartment.room_count, apartment.floor_space, apartment.resident_count, apartment.house_id
+          apartment.apartment_id,apartment.room_count,apartment.floor_space,apartment.resident_count,apartment.house_id
           FROM
               apartment
           RIGHT JOIN
               owner
                   ON
-                    apartment.id = apartment_id
+                    owner.owner_id = apartment.owner_id
          WHERE
              floor_space = 50
         ORDER BY
@@ -165,20 +169,19 @@
         LIMIT 2;
 
 --     3. LEFT JOIN трех таблиц + WHERE по атрибуту из каждой таблицы
-        SELECT
-            owner.id, owner.name, owner.phone
+        SELECT owner.owner_id, owner.name, owner.phone
           FROM
               owner
           LEFT JOIN
               apartment
             ON
-               apartment.id = apartment_id
+               apartment.owner_id = owner.owner_id
           LEFT JOIN
               house
             ON
-                house.id = house_id
+              house.house_id = apartment.house_id
          WHERE
-             house.age != 5
+             house.construction_date > '1980-02-12'
          AND
              apartment.room_count = 2
          AND
@@ -186,28 +189,28 @@
 
 --     4. FULL OUTER JOIN двух таблиц
         SELECT
-            apartment.id, apartment.resident_count, apartment.floor_space
+          apartment.apartment_id,apartment.resident_count,apartment.floor_space
           FROM
               apartment
           FULL OUTER JOIN
               house
             ON
-              house.id = house_id
+              house.house_id = apartment.house_id
         ORDER BY floor_space;
 --
 -- 10. Подзапросы
 --     1. Написать запрос с WHERE IN (подзапрос)
-        SELECT id, name
+        SELECT owner_id, name
           FROM owner
          WHERE name IN (SELECT name
                           FROM owner
-                          LEFT JOIN apartment a ON owner.apartment_id = a.id
+                          LEFT JOIN apartment a ON a.owner_id = owner.owner_id
                          WHERE room_count = 2);
 
 --     2. Написать запрос SELECT atr1, atr2, (подзапрос) FROM ...
-        SELECT id, phone,
+        SELECT owner_id,phone,
             (SELECT apartment_id
               FROM apartment
-             WHERE owner.id = apartment.id)
+             WHERE owner.owner_id = apartment.apartment_id)
           AS apartment_id
           FROM owner;
