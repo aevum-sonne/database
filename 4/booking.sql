@@ -39,16 +39,18 @@
         AND checkout_date >= '2019-04-01'::date;
 
 -- 3. Дать список свободных номеров всех гостиниц на 22 апреля.
-    SELECT hotel.name, room_category.name, room.number, room.price
-      FROM room_in_booking
-        LEFT JOIN room ON room.id_room = room_in_booking.id_room
-        LEFT JOIN hotel ON hotel.id_hotel = room.id_hotel
-        LEFT JOIN room_category ON room_category.id_room_category = room.id_room_category
-     WHERE checkin_date > '2019-04-22'::date
-        OR checkout_date < '2019-04-22'::date;
+    SELECT all_rooms.id_room, all_rooms.number, all_rooms.price
+      FROM room AS all_rooms
+    EXCEPT
+      SELECT room.id_room, room.number, room.price
+        FROM room
+          LEFT JOIN room_in_booking rib ON room.id_room = rib.id_room
+       WHERE rib.checkin_date <= '2019-04-22'::date
+          OR rib.checkout_date > '2019-04-22'::date
+    ORDER BY id_room;
 
 -- 4. Дать количество проживающих в гостинице "Космос" на 23 марта по каждой категории номеров
-    SELECT count(room_in_booking.id_room_in_booking), room_category.name
+    SELECT COUNT(room_in_booking.id_room_in_booking), room_category.name
       FROM room_in_booking
         LEFT JOIN room ON room.id_room = room_in_booking.id_room
         LEFT JOIN hotel ON hotel.id_hotel = room.id_hotel
@@ -59,16 +61,23 @@
 
 -- 5. Дать список последних проживавших клиентов по всем комнатам гостиницы “Космос”,
 -- выехавшим в апреле с указанием даты выезда.
-    SELECT client.name, room.id_room, room_in_booking.checkout_date
+    WITH last_dates AS (SELECT
+      room_in_booking.id_room,
+      MAX(room_in_booking.checkout_date) AS departure_date
       FROM room_in_booking
         LEFT JOIN room ON room.id_room = room_in_booking.id_room
-        LEFT JOIN hotel ON hotel.id_hotel = room.id_hotel
-        LEFT JOIN room_category ON room_category.id_room_category = room.id_room_category
-        LEFT JOIN booking ON booking.id_booking = room_in_booking.id_booking
-        LEFT JOIN client ON client.id_client = booking.id_client
-    WHERE hotel.name = 'Космос'
-        AND (checkout_date BETWEEN '2019-04-01'::date AND '2019-04-30'::date)
-    GROUP BY room.id_room, client.name, room_in_booking.checkout_date;
+        LEFT JOIN hotel h ON room.id_hotel = h.id_hotel
+     WHERE h.name = 'Космос'
+      AND checkout_date BETWEEN '2019-04-01' AND '2019-04-30'
+    GROUP BY room_in_booking.id_room)
+
+    SELECT last_dates.id_room, client.name, MAX(last_dates.departure_date) AS checkout_date
+      FROM last_dates
+        LEFT JOIN room_in_booking ON room_in_booking.id_room = last_dates.id_room AND room_in_booking.checkout_date = last_dates.departure_date
+        LEFT JOIN booking ON room_in_booking.id_booking = booking.id_booking
+        LEFT JOIN client ON booking.id_client = client.id_client
+    GROUP BY client.name, last_dates.id_room
+    ORDER BY id_room;
 
 -- 6. Продлить на 2 дня дату проживания в гостинице “Космос” всем клиентам
 -- комнат категории “Бизнес”, которые заселились 10 мая.
@@ -94,47 +103,42 @@
 -- выборки должен содержать информацию о двух конфликтующих номерах.
     SELECT booking1.id_booking, booking1.checkin_date, booking1.checkout_date, booking2.id_booking,
            booking2.checkin_date, booking2.checkout_date
-      FROM room_in_booking booking1, room_in_booking booking2
-    WHERE booking1.id_room = booking2.id_room
-        AND booking1.id_room_in_booking != booking2.id_room_in_booking
-        AND (booking1.checkin_date BETWEEN booking2.checkin_date AND booking2.checkout_date
-            OR booking2.checkin_date BETWEEN booking1.checkin_date AND booking1.checkout_date);
+      FROM room_in_booking booking1
+        LEFT JOIN room_in_booking AS booking2 ON booking1.id_room = booking2.id_room
+    WHERE booking1.id_room_in_booking != booking2.id_room_in_booking
+        AND (booking1.checkin_date < booking2.checkin_date
+               AND booking1.checkout_date > booking2.checkin_date);
 
 -- 8. Создать бронирование в транзакции.
     BEGIN TRANSACTION;
       INSERT INTO client
         (id_client, name, phone)
       VALUES
-        ((SELECT id_client FROM client ORDER BY id_client DESC LIMIT 1) + 1,
-         'Jean-Paul Marat', '+49048383833');
+        (NEXTVAL('client_id_client_seq'), 'Taylor Swift', '+18448444944');
 
       INSERT INTO booking
         (id_booking, id_client, booking_date)
       VALUES
-        ((SELECT id_booking FROM booking ORDER BY id_booking DESC LIMIT 1) + 1,
-         (SELECT id_client FROM client ORDER BY id_client DESC LIMIT 1), '2019-04-04');
+        (NEXTVAL(booking_id_booking_seq), CURRVAL(client_id_client_seq), '1999-12-13');
 
       INSERT INTO room_in_booking
         (id_room_in_booking, id_booking, id_room, checkin_date, checkout_date)
       VALUES
-        ((SELECT id_room_in_booking FROM room_in_booking ORDER BY id_room_in_booking DESC LIMIT 1) + 1,
-         (SELECT id_booking FROM booking ORDER BY id_booking DESC LIMIT 1), 23, '2019-04-04', '2019-04-12');
+        (NEXTVAL('room_in_booking_id_room_in_booking_seq'), CURRVAL('booking_id_booking_seq'), 23, '2019-04-04', '2019-04-12');
     COMMIT;
 
-    SELECT *
-      FROM room_in_booking
-    ORDER BY id_room_in_booking DESC
-    LIMIT 1;
-
 -- 9. Добавить необходимые индексы для всех таблиц.
-    CREATE INDEX client_name_phone_index
-      ON client (name, phone);
+    create index client_name_index
+      on client (name);
 
-    CREATE INDEX hotel_name_stars_index
-      ON hotel (name, stars);
+    create index client_phone_index
+      on client (phone);
 
-    CREATE INDEX room_category_name_square_index
-      ON room_category (name, square);
+    create index hotel_name_index
+      on hotel (name);
+
+    create index room_category_name_index
+      on room_category (name);
 
     CREATE INDEX booking_id_client_index
       ON booking (id_client);
@@ -142,14 +146,26 @@
     CREATE INDEX booking_booking_date_index
       ON booking (booking_date);
 
-    CREATE INDEX room_id_hotel_id_room_category_index
-      ON room (id_hotel, id_room_category);
+    create index room_id_hotel_index
+      on room (id_hotel);
 
-    CREATE INDEX room_number_price_index
-      ON room (number, price);
+    create index room_id_room_category_index
+      on room (id_room_category);
 
-    CREATE INDEX room_in_booking_id_booking_id_room_index
-      ON room_in_booking (id_booking, id_room);
+    create index room_number_index
+      on room (number);
 
-    CREATE INDEX room_in_booking_checkout_date_checkout_date_index
-      ON room_in_booking (checkout_date, checkout_date);
+    create index room_price_index
+      on room (price);
+
+    create index room_in_booking_checkin_date_index
+      on room_in_booking (checkin_date);
+
+    create index room_in_booking_checkout_date_index
+      on room_in_booking (checkout_date);
+
+    create index room_in_booking_id_booking_index
+      on room_in_booking (id_booking);
+
+    create index room_in_booking_id_room_index
+      on room_in_booking (id_room);
