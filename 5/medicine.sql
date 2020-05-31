@@ -47,11 +47,17 @@
 
 -- 3. Дать список лекарств компании “Фарма”, на которые не были сделаны заказы
 -- до 25 января.
-    SELECT medicine_name
+    SELECT medicine.name
       FROM
-        order_view
-     WHERE company_name = 'Фарма'
-      AND date > '2019-01-25';
+        medicine
+    EXCEPT
+      SELECT medicine.name
+        FROM medicine
+          LEFT JOIN production p ON medicine.id_medicine = p.id_medicine
+          LEFT JOIN company ON p.id_company = company.id_company
+          LEFT JOIN "order" o ON o.id_production = p.id_production
+       WHERE o.date < '2019-01-25'
+        AND company.name = 'Фарма';
 
 -- 4. Дать минимальный и максимальный баллы лекарств каждой фирмы, которая
 -- оформила не менее 120 заказов.
@@ -63,12 +69,15 @@
 
 -- 5. Дать списки сделавших заказы аптек по всем дилерам компании “AstraZeneca”.
 -- Если у дилера нет заказов, в названии аптеки проставить NULL.
-    SELECT dealer_name,
-           pharmacy_name
+    SELECT dealer.name,
+           pharmacy.name
       FROM
-        order_view
-     WHERE company_name = 'AstraZeneca'
-    ORDER BY dealer_name;
+        dealer
+          JOIN company ON dealer.id_company = company.id_company
+          LEFT JOIN "order" ON dealer.id_dealer = "order".id_dealer
+          LEFT JOIN pharmacy ON "order".id_pharmacy = pharmacy.id_pharmacy
+     WHERE company.name = 'AstraZeneca'
+    ORDER BY pharmacy.name DESC;
 
 -- 6. Уменьшить на 20% стоимость всех лекарств, если она превышает 3000, а
 -- длительность лечения не более 7 дней.
