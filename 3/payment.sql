@@ -126,19 +126,22 @@
         GROUP BY address
         HAVING AVG(floor_count) < 20;
 
-        SELECT COUNT(o.owner_id)
+        SELECT o.name,
+               AVG(floor_space)
           FROM payment
             LEFT JOIN apartment a
               ON payment.apartment_id = a.apartment_id
             LEFT JOIN owner o
               ON a.owner_id = o.owner_id
         GROUP BY o.name
-        HAVING COUNT(amount) = 1;
+        HAVING AVG(floor_space) > 30;
 
-        SELECT date, COUNT(payment_id)
-          FROM payment
-        GROUP BY date
-        HAVING COUNT(payment_id) = 2;
+        SELECT SUM(DISTINCT apartment_id) AS apartment_count,
+               h.address
+          FROM apartment
+            LEFT JOIN house h ON apartment.house_id = h.house_id
+        GROUP BY h.address
+        HAVING SUM(DISTINCT apartment_id) >= 2;
 
 -- 9. SELECT JOIN
 --     1. LEFT JOIN двух таблиц и WHERE по одному из атрибутов
